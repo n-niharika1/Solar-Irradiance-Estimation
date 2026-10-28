@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+env/
+.env
+*.env.local
+
+# Node
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Large files tracked via Git LFS (see .gitattributes)
+# *.joblib
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

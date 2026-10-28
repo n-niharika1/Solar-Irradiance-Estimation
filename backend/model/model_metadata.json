@@ -1,0 +1,16 @@
+{
+    "model_name": "Random Forest",
+    "features": [
+        "YEAR",
+        "LAT",
+        "LON",
+        "MONTH_NUM",
+        "CLEARSKY"
+    ],
+    "target": "GHI",
+    "target_unit": "kWh/m\u00b2/day",
+    "test_locations": 13,
+    "test_RMSE": 0.1762388065835919,
+    "test_MAE": 0.12639617051282045,
+    "test_R2": 0.959976021824371
+}

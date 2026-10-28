@@ -1,0 +1,2 @@
+*.joblib filter=lfs diff=lfs merge=lfs -text
+backend/model/*.joblib filter=lfs diff=lfs merge=lfs -text
