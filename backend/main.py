@@ -129,7 +129,25 @@ class PredictionRequest(BaseModel):
         ...,
         ge=0,
         le=15,
-        description="Clear-sky GHI in kWh/m²/day (0-15)",
+        description="Clear-sky GHI (CLRSKY_SFC_SW_DWN) in kWh/m²/day (0-15)",
+    )
+    dni: Optional[float] = Field(
+        None,
+        ge=0,
+        le=15,
+        description="Direct Normal Irradiance (ALLSKY_SFC_SW_DNI) in kWh/m²/day",
+    )
+    diffuse: Optional[float] = Field(
+        None,
+        ge=0,
+        le=15,
+        description="Diffuse Sky Radiation (ALLSKY_SFC_SW_DIFF) in kWh/m²/day",
+    )
+    cloud_amt: Optional[float] = Field(
+        None,
+        ge=0,
+        le=100,
+        description="Cloud Amount (CLOUD_AMT) percentage (0-100%)",
     )
 
 
@@ -246,9 +264,44 @@ def _predict_single(req: PredictionRequest) -> PredictionResult:
         logger.error("Prediction failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}")
 
+    # Radiative transfer decomposition (GHI = DNI * cos(zenith) + DIFFUSE)
+    mid_days = [15, 45, 74, 105, 135, 166, 196, 227, 258, 288, 319, 349]
+    d_day = mid_days[max(0, min(11, req.month - 1))]
+    decl_deg = 23.45 * np.sin(np.radians((360.0 / 365.0) * (284.0 + float(d_day))))
+    lat_rad = np.radians(req.latitude)
+    decl_rad = np.radians(decl_deg)
+    cos_omega_s = -np.tan(lat_rad) * np.tan(decl_rad)
+    omega_s = np.arccos(np.clip(cos_omega_s, -1.0, 1.0))
+    if omega_s > 0:
+        cos_zenith = np.sin(lat_rad) * np.sin(decl_rad) + (np.cos(lat_rad) * np.cos(decl_rad) * np.sin(omega_s)) / float(omega_s)
+    else:
+        cos_zenith = 0.05
+    cos_zenith = float(np.clip(cos_zenith, 0.1, 0.95))
+
+    if req.dni is not None and req.diffuse is not None:
+        dni_val = float(req.dni)
+        diff_val = float(req.diffuse)
+        direct_horiz = float(np.round(dni_val * cos_zenith, 4))
+        ghi_value = float(np.round(min(direct_horiz + diff_val, req.clearsky * 1.08), 4))
+    else:
+        kt = ghi_value / max(0.1, req.clearsky)
+        diff_ratio = 0.92 if kt <= 0.35 else (1.0 - 1.1 * (kt - 0.2) if kt <= 0.75 else 0.25)
+        diff_ratio = float(np.clip(diff_ratio, 0.22, 0.85))
+        diff_val = float(np.round(ghi_value * diff_ratio, 4))
+        direct_horiz = max(0.0, ghi_value - diff_val)
+        dni_val = float(np.round(direct_horiz / cos_zenith, 4)) if cos_zenith > 0.05 else 0.0
+
+    diff_frac = float(np.round(diff_val / ghi_value, 4)) if ghi_value > 0 else 0.0
+    clearness = float(np.round(ghi_value / req.clearsky, 4)) if req.clearsky > 0 else 0.0
+
     return PredictionResult(
         prediction={
             "ghi": ghi_value,
+            "dni": dni_val,
+            "diffuse": diff_val,
+            "direct_horizontal": direct_horiz,
+            "diffuse_fraction": diff_frac,
+            "clearness_index": clearness,
             "unit": metadata.get("target_unit", "kWh/m²/day"),
             "description": "Estimated monthly mean daily Global Horizontal Irradiance",
         },
@@ -260,6 +313,9 @@ def _predict_single(req: PredictionRequest) -> PredictionResult:
             "month": req.month,
             "month_name": _month_name(req.month),
             "clearsky": req.clearsky,
+            "dni": dni_val,
+            "diffuse": diff_val,
+            "cloud_amt": req.cloud_amt,
         },
         warnings=warnings,
     )

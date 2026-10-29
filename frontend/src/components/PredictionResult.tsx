@@ -1,4 +1,4 @@
-import { Sun, CheckCircle2, AlertTriangle, ShieldCheck, Zap } from 'lucide-react';
+import { Sun, CheckCircle2, AlertTriangle, ShieldCheck, Zap, Layers, Compass, Wind } from 'lucide-react';
 import type { PredictionResponse } from '../types';
 
 interface PredictionResultProps {
@@ -6,7 +6,13 @@ interface PredictionResultProps {
 }
 
 export default function PredictionResult({ data }: PredictionResultProps) {
-  const ghi = data.prediction.ghi;
+  const pred = data.prediction;
+  const ghi = pred.ghi;
+  const dni = pred.dni ?? 0;
+  const diffuse = pred.diffuse ?? 0;
+  const directHoriz = pred.direct_horizontal ?? Math.max(0, ghi - diffuse);
+  const diffFrac = pred.diffuse_fraction ?? (ghi > 0 ? diffuse / ghi : 0);
+  const clearness = pred.clearness_index ?? (data.inputs.clearsky > 0 ? ghi / data.inputs.clearsky : 0);
 
   // Potential categorization
   const getPotential = (val: number) => {
@@ -42,7 +48,6 @@ export default function PredictionResult({ data }: PredictionResultProps) {
   };
 
   const potential = getPotential(ghi);
-  // Estimated energy production for typical 1 kWp system (with standard 75% performance ratio over 30 days)
   const estimatedKwhPerKwp = Math.round(ghi * 30 * 0.75 * 10) / 10;
 
   return (
@@ -65,19 +70,31 @@ export default function PredictionResult({ data }: PredictionResultProps) {
       <div className="relative overflow-hidden rounded-2xl border border-solar-gold/30 bg-gradient-to-br from-solar-gold/15 via-navy-800 to-navy-900 p-6 md:p-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border mb-3 border-solar-gold/30 bg-solar-gold/10 text-solar-gold">
-              <ShieldCheck size={14} />
-              Validated Model Estimate ({data.model})
+            <div className="flex items-center gap-2 flex-wrap mb-3">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border border-solar-gold/30 bg-solar-gold/10 text-solar-gold">
+                <ShieldCheck size={14} />
+                Validated ML Estimate ({data.model})
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                  data.engine === 'backend'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                    : 'border-blue-500/30 bg-blue-500/10 text-blue-300'
+                }`}
+              >
+                {data.engine === 'backend' ? 'FastAPI Backend Online' : 'In-Browser ML Engine (Resilient)'}
+              </span>
             </div>
+
             <p className="text-sm font-medium uppercase tracking-wider text-slate-400">
-              Estimated Monthly Mean Daily GHI
+              Global Horizontal Irradiance (ALLSKY_SFC_SW_DWN)
             </p>
             <div className="flex items-baseline gap-3 mt-2">
               <span className="text-5xl md:text-6xl font-black tracking-tight text-white">
                 {ghi.toFixed(4)}
               </span>
               <span className="text-lg md:text-xl font-semibold text-solar-gold">
-                {data.prediction.unit}
+                {pred.unit}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-2">
@@ -105,53 +122,120 @@ export default function PredictionResult({ data }: PredictionResultProps) {
         </div>
       </div>
 
+      {/* Solar Components Breakdown (GHI, DNI, DIFFUSE) */}
+      <div>
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-2">
+          <Layers size={16} className="text-solar-gold" />
+          Solar Radiation Radiative Transfer Decomposition
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Direct Normal Irradiance (DNI) */}
+          <div className="rounded-xl border border-white/10 bg-navy-900/70 p-4 space-y-1">
+            <span className="text-[11px] uppercase font-bold text-slate-400 flex items-center gap-1.5">
+              <Compass size={13} className="text-amber-400" />
+              Direct Normal (DNI)
+            </span>
+            <p className="text-2xl font-black text-white">
+              {dni.toFixed(2)} <span className="text-xs text-solar-gold font-normal">kWh/m²/day</span>
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Beam component: <strong>{directHoriz.toFixed(2)}</strong> kWh/m²/day on horizontal plane.
+            </p>
+          </div>
+
+          {/* Diffuse Irradiance (DIFF) */}
+          <div className="rounded-xl border border-white/10 bg-navy-900/70 p-4 space-y-1">
+            <span className="text-[11px] uppercase font-bold text-slate-400 flex items-center gap-1.5">
+              <Wind size={13} className="text-blue-400" />
+              Diffuse Sky (DIFF)
+            </span>
+            <p className="text-2xl font-black text-white">
+              {diffuse.toFixed(2)} <span className="text-xs text-blue-400 font-normal">kWh/m²/day</span>
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Diffuse fraction: <strong>{(diffFrac * 100).toFixed(1)}%</strong> of total GHI.
+            </p>
+          </div>
+
+          {/* Clearness Index */}
+          <div className="rounded-xl border border-white/10 bg-navy-900/70 p-4 space-y-1">
+            <span className="text-[11px] uppercase font-bold text-slate-400 flex items-center gap-1.5">
+              <Sun size={13} className="text-emerald-400" />
+              Clearness Index (kₜ)
+            </span>
+            <p className="text-2xl font-black text-white">
+              {(clearness * 100).toFixed(1)}%
+            </p>
+            <p className="text-[11px] text-slate-400">
+              GHI vs Clear-sky ratio ({data.inputs.clearsky.toFixed(2)} kWh/m²/day ceiling).
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Feature Input Summary Table */}
       <div>
         <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-2">
           <CheckCircle2 size={16} className="text-emerald-400" />
-          Feature Input Summary (Training Feature Order)
+          Feature Input Summary (NASA POWER Meteorological Parameters)
         </h3>
         <div className="overflow-x-auto rounded-xl border border-white/10 bg-navy-900/60">
           <table className="w-full text-left text-xs">
             <thead className="bg-navy-700/50 text-slate-400 border-b border-white/10">
               <tr>
-                <th className="py-2.5 px-4 font-semibold">Order</th>
-                <th className="py-2.5 px-4 font-semibold">Feature Name</th>
+                <th className="py-2.5 px-4 font-semibold">Parameter</th>
+                <th className="py-2.5 px-4 font-semibold">Dataset Column</th>
                 <th className="py-2.5 px-4 font-semibold">Value Used</th>
                 <th className="py-2.5 px-4 font-semibold">Scientific Description</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-slate-300">
               <tr>
-                <td className="py-2.5 px-4 text-slate-500 font-mono">1</td>
-                <td className="py-2.5 px-4 font-mono font-semibold text-solar-gold">YEAR</td>
+                <td className="py-2.5 px-4 font-semibold text-white">Year</td>
+                <td className="py-2.5 px-4 font-mono text-solar-gold">YEAR</td>
                 <td className="py-2.5 px-4 font-bold text-white">{data.inputs.year}</td>
-                <td className="py-2.5 px-4 text-slate-400">Temporal year coordinate</td>
+                <td className="py-2.5 px-4 text-slate-400">Temporal year coordinate (2001–2025)</td>
               </tr>
               <tr>
-                <td className="py-2.5 px-4 text-slate-500 font-mono">2</td>
-                <td className="py-2.5 px-4 font-mono font-semibold text-solar-gold">LAT</td>
+                <td className="py-2.5 px-4 font-semibold text-white">Latitude</td>
+                <td className="py-2.5 px-4 font-mono text-solar-gold">LAT</td>
                 <td className="py-2.5 px-4 font-bold text-white">{data.inputs.latitude}°</td>
-                <td className="py-2.5 px-4 text-slate-400">Geographic latitude (decimal degrees)</td>
+                <td className="py-2.5 px-4 text-slate-400">Geographic latitude in decimal degrees</td>
               </tr>
               <tr>
-                <td className="py-2.5 px-4 text-slate-500 font-mono">3</td>
-                <td className="py-2.5 px-4 font-mono font-semibold text-solar-gold">LON</td>
+                <td className="py-2.5 px-4 font-semibold text-white">Longitude</td>
+                <td className="py-2.5 px-4 font-mono text-solar-gold">LON</td>
                 <td className="py-2.5 px-4 font-bold text-white">{data.inputs.longitude}°</td>
-                <td className="py-2.5 px-4 text-slate-400">Geographic longitude (decimal degrees)</td>
+                <td className="py-2.5 px-4 text-slate-400">Geographic longitude in decimal degrees</td>
               </tr>
               <tr>
-                <td className="py-2.5 px-4 text-slate-500 font-mono">4</td>
-                <td className="py-2.5 px-4 font-mono font-semibold text-solar-gold">MONTH_NUM</td>
+                <td className="py-2.5 px-4 font-semibold text-white">Month</td>
+                <td className="py-2.5 px-4 font-mono text-solar-gold">MONTH_NUM</td>
                 <td className="py-2.5 px-4 font-bold text-white">{data.inputs.month} ({data.inputs.month_name})</td>
-                <td className="py-2.5 px-4 text-slate-400">Annual month index (1–12)</td>
+                <td className="py-2.5 px-4 text-slate-400">Annual calendar month (1–12)</td>
               </tr>
               <tr>
-                <td className="py-2.5 px-4 text-slate-500 font-mono">5</td>
-                <td className="py-2.5 px-4 font-mono font-semibold text-solar-gold">CLEARSKY</td>
+                <td className="py-2.5 px-4 font-semibold text-white">Clear-Sky Irradiance</td>
+                <td className="py-2.5 px-4 font-mono text-solar-gold">CLRSKY_SFC_SW_DWN</td>
                 <td className="py-2.5 px-4 font-bold text-white">{data.inputs.clearsky} kWh/m²/day</td>
-                <td className="py-2.5 px-4 text-slate-400">Theoretical cloud-free GHI baseline</td>
+                <td className="py-2.5 px-4 text-slate-400">Irradiance under clear/cloudless sky</td>
               </tr>
+              {data.inputs.dni && (
+                <tr>
+                  <td className="py-2.5 px-4 font-semibold text-white">Direct Normal Irradiance</td>
+                  <td className="py-2.5 px-4 font-mono text-solar-gold">ALLSKY_SFC_SW_DNI</td>
+                  <td className="py-2.5 px-4 font-bold text-white">{data.inputs.dni} kWh/m²/day</td>
+                  <td className="py-2.5 px-4 text-slate-400">Direct solar beam irradiance for tracking/CSP</td>
+                </tr>
+              )}
+              {data.inputs.diffuse && (
+                <tr>
+                  <td className="py-2.5 px-4 font-semibold text-white">Diffuse Sky Radiation</td>
+                  <td className="py-2.5 px-4 font-mono text-solar-gold">ALLSKY_SFC_SW_DIFF</td>
+                  <td className="py-2.5 px-4 font-bold text-white">{data.inputs.diffuse} kWh/m²/day</td>
+                  <td className="py-2.5 px-4 text-slate-400">Atmospheric scattered diffuse irradiance</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -161,16 +245,13 @@ export default function PredictionResult({ data }: PredictionResultProps) {
       <div className="rounded-xl border border-white/10 bg-navy-900/40 p-4 text-xs text-slate-400 space-y-1.5">
         <p className="font-semibold text-slate-300 flex items-center gap-1.5">
           <Sun size={14} className="text-solar-gold" />
-          Scientific Transparency & Model Interpretability
+          Atmospheric Radiative Transfer Law: GHI = DNI · cos(θz) + DIFF
         </p>
         <p>
-          • <strong>Metric definition:</strong> The model estimates <em>monthly mean daily solar irradiation</em> in <code className="text-solar-gold">kWh/m²/day</code>. This is not an instantaneous irradiance measurement in W/m².
+          • <strong>Closure principle:</strong> Total downward global shortwave flux consists of the attenuated direct solar beam on a horizontal plane plus scattered diffuse sky radiation.
         </p>
         <p>
-          • <strong>Model scope:</strong> Predictions represent statistical regressions from regional NASA POWER monthly satellite observations (2001–2025 across 63 Indian locations).
-        </p>
-        <p>
-          • <strong>Validation status:</strong> Evaluated on 13 independent held-out geographical locations (MAE: 0.1264, RMSE: 0.1762, R²: 0.9600). Not independently calibrated against ground BSRN station radiometers.
+          • <strong>Physical Units:</strong> Reported in <code className="text-solar-gold">kWh/m²/day</code> (monthly mean daily total solar irradiation).
         </p>
       </div>
     </div>

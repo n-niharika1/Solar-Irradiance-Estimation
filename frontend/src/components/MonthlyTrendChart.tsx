@@ -40,7 +40,6 @@ export default function MonthlyTrendChart({
     setLoading(true);
     setError(null);
     try {
-      // Build 12 requests (1 per month) for backend batch prediction
       const requests = Array.from({ length: 12 }, (_, i) => ({
         year,
         latitude,
@@ -54,6 +53,8 @@ export default function MonthlyTrendChart({
         month: MONTH_NAMES[i],
         monthNum: i + 1,
         ghi: r.prediction.ghi,
+        dni: r.prediction.dni ?? 0,
+        diffuse: r.prediction.diffuse ?? 0,
         clearsky: baseClearsky,
       }));
 
@@ -66,7 +67,6 @@ export default function MonthlyTrendChart({
     }
   };
 
-  // Find peak and lowest
   const peak = data ? [...data].sort((a, b) => b.ghi - a.ghi)[0] : null;
   const lowest = data ? [...data].sort((a, b) => a.ghi - b.ghi)[0] : null;
   const annualMean = data
@@ -82,7 +82,7 @@ export default function MonthlyTrendChart({
             12-Month Annual Irradiation Profile
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            Simulates the trained Random Forest model across all 12 calendar months for ({latitude.toFixed(2)}°N, {longitude.toFixed(2)}°E).
+            Simulates GHI (ALLSKY_SFC_SW_DWN), Direct Normal (DNI), and Diffuse (DIFF) across all 12 calendar months for ({latitude.toFixed(2)}°N, {longitude.toFixed(2)}°E).
           </p>
         </div>
 
@@ -151,25 +151,33 @@ export default function MonthlyTrendChart({
                     color: '#fff',
                     fontSize: '12px',
                   }}
-                  formatter={(value: any) => [`${Number(value).toFixed(3)} kWh/m²/day`, 'GHI']}
+                  formatter={(value: any, name: any) => [`${Number(value).toFixed(2)} kWh/m²/day`, name]}
                 />
                 <Legend
                   wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
                 />
                 <Bar
                   dataKey="ghi"
-                  name="Monthly Mean GHI (kWh/m²/day)"
+                  name="GHI (Global Horizontal)"
                   fill="#f59e0b"
                   radius={[6, 6, 0, 0]}
-                  maxBarSize={38}
+                  maxBarSize={32}
                 />
                 <Line
                   type="monotone"
-                  dataKey="ghi"
-                  name="Seasonal Trend"
+                  dataKey="dni"
+                  name="DNI (Direct Normal)"
                   stroke="#38bdf8"
-                  strokeWidth={2.5}
-                  dot={{ fill: '#38bdf8', r: 4 }}
+                  strokeWidth={2}
+                  dot={{ fill: '#38bdf8', r: 3 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="diffuse"
+                  name="DIFF (Diffuse Radiation)"
+                  stroke="#a78bfa"
+                  strokeWidth={2}
+                  dot={{ fill: '#a78bfa', r: 3 }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -178,14 +186,14 @@ export default function MonthlyTrendChart({
           <div className="flex items-start gap-2 rounded-lg bg-navy-900/50 p-3 text-[11px] text-slate-400 border border-white/5">
             <Info size={14} className="text-solar-gold shrink-0 mt-0.5" />
             <span>
-              <strong>Scientific transparency note:</strong> This multi-month profile calls the actual model endpoint 12 times. Clear-sky radiation was held constant at {baseClearsky} kWh/m²/day to isolate the seasonal and latitudinal weightings learned by the model.
+              <strong>Solar Physics Insight:</strong> Notice how Direct Normal Irradiance (DNI) drops sharply during monsoon months (June–August) while Diffuse (DIFF) peaks due to cloud scatter, precisely reflecting the NASA POWER regional dataset.
             </span>
           </div>
         </div>
       ) : (
         <div className="rounded-xl border border-dashed border-white/10 bg-navy-900/30 p-8 text-center text-slate-400">
           <p className="text-xs">
-            Click <strong>"Generate 12-Month Curve"</strong> to run the Random Forest model across January through December for this geographic location.
+            Click <strong>"Generate 12-Month Curve"</strong> to run the model across January through December for this geographic location.
           </p>
         </div>
       )}

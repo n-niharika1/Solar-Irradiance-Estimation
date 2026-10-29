@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, Calendar, Sun, Sparkles, AlertCircle } from 'lucide-react';
+import { MapPin, Calendar, Sun, Sparkles, AlertCircle, Sliders, ChevronDown, ChevronUp, CloudSun } from 'lucide-react';
 import Tooltip from './Tooltip';
 import type { FormValues, FormErrors, PredictionRequest } from '../types';
 
@@ -24,10 +24,50 @@ const MONTHS = [
 ];
 
 const PRESETS = [
-  { name: 'Vijayawada, AP (Training Region)', lat: '16.5062', lon: '80.6480', year: '2024', month: '5', clearsky: '6.8' },
-  { name: 'New Delhi, DL', lat: '28.6139', lon: '77.2090', year: '2024', month: '4', clearsky: '6.5' },
-  { name: 'Bengaluru, KA', lat: '12.9716', lon: '77.5946', year: '2024', month: '3', clearsky: '6.2' },
-  { name: 'Ahmedabad, GJ', lat: '23.0225', lon: '72.5714', year: '2024', month: '5', clearsky: '7.1' },
+  {
+    name: 'Vijayawada, AP',
+    lat: '16.5062',
+    lon: '80.6480',
+    year: '2024',
+    month: '5',
+    clearsky: '6.8',
+    dni: '4.5',
+    diffuse: '3.1',
+    cloud_amt: '55',
+  },
+  {
+    name: 'New Delhi, DL',
+    lat: '28.6139',
+    lon: '77.2090',
+    year: '2024',
+    month: '4',
+    clearsky: '6.5',
+    dni: '5.0',
+    diffuse: '2.9',
+    cloud_amt: '35',
+  },
+  {
+    name: 'Bengaluru, KA',
+    lat: '12.9716',
+    lon: '77.5946',
+    year: '2024',
+    month: '3',
+    clearsky: '6.2',
+    dni: '5.2',
+    diffuse: '2.4',
+    cloud_amt: '28',
+  },
+  {
+    name: 'Ahmedabad, GJ',
+    lat: '23.0225',
+    lon: '72.5714',
+    year: '2024',
+    month: '5',
+    clearsky: '7.1',
+    dni: '5.6',
+    diffuse: '2.8',
+    cloud_amt: '22',
+  },
 ];
 
 export default function PredictionForm({ onSubmit, isLoading }: PredictionFormProps) {
@@ -37,9 +77,14 @@ export default function PredictionForm({ onSubmit, isLoading }: PredictionFormPr
     year: '2024',
     month: '1',
     clearsky: '6.2',
+    dni: '',
+    diffuse: '',
+    cloud_amt: '',
+    useAdvanced: false,
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
@@ -72,9 +117,21 @@ export default function PredictionForm({ onSubmit, isLoading }: PredictionFormPr
 
     const cs = parseFloat(values.clearsky);
     if (isNaN(cs)) {
-      newErrors.clearsky = 'Clear-sky GHI is required';
+      newErrors.clearsky = 'Clear-sky GHI (CLRSKY_SFC_SW_DWN) is required';
     } else if (cs < 0 || cs > 15) {
       newErrors.clearsky = 'Clear-sky value must be between 0 and 15 kWh/m²/day';
+    }
+
+    if (values.dni && (parseFloat(values.dni) < 0 || parseFloat(values.dni) > 15)) {
+      newErrors.dni = 'DNI must be between 0 and 15 kWh/m²/day';
+    }
+
+    if (values.diffuse && (parseFloat(values.diffuse) < 0 || parseFloat(values.diffuse) > 15)) {
+      newErrors.diffuse = 'Diffuse must be between 0 and 15 kWh/m²/day';
+    }
+
+    if (values.cloud_amt && (parseFloat(values.cloud_amt) < 0 || parseFloat(values.cloud_amt) > 100)) {
+      newErrors.cloud_amt = 'Cloud amount must be between 0% and 100%';
     }
 
     setErrors(newErrors);
@@ -91,6 +148,9 @@ export default function PredictionForm({ onSubmit, isLoading }: PredictionFormPr
       year: parseInt(values.year, 10),
       month: parseInt(values.month, 10),
       clearsky: parseFloat(values.clearsky),
+      dni: values.dni ? parseFloat(values.dni) : undefined,
+      diffuse: values.diffuse ? parseFloat(values.diffuse) : undefined,
+      cloud_amt: values.cloud_amt ? parseFloat(values.cloud_amt) : undefined,
     });
   };
 
@@ -101,6 +161,10 @@ export default function PredictionForm({ onSubmit, isLoading }: PredictionFormPr
       year: preset.year,
       month: preset.month,
       clearsky: preset.clearsky,
+      dni: preset.dni,
+      diffuse: preset.diffuse,
+      cloud_amt: preset.cloud_amt,
+      useAdvanced: true,
     });
     setErrors({});
   };
@@ -114,7 +178,7 @@ export default function PredictionForm({ onSubmit, isLoading }: PredictionFormPr
             Input Parameters
           </h2>
           <p className="text-sm text-slate-400 mt-1">
-            Specify location, temporal period, and clear-sky radiation index.
+            Specify location, temporal period, and NASA POWER radiation metrics.
           </p>
         </div>
 
@@ -129,7 +193,7 @@ export default function PredictionForm({ onSubmit, isLoading }: PredictionFormPr
               key={idx}
               type="button"
               onClick={() => applyPreset(p)}
-              className="text-xs px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300 hover:border-solar-gold/50 hover:text-white transition-all"
+              className="text-xs px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300 hover:border-solar-gold/50 hover:text-white transition-all cursor-pointer"
             >
               {p.name.split(',')[0]}
             </button>
@@ -263,11 +327,11 @@ export default function PredictionForm({ onSubmit, isLoading }: PredictionFormPr
           </div>
         </div>
 
-        {/* Clear-sky GHI */}
+        {/* Clear-sky GHI (CLRSKY_SFC_SW_DWN) */}
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-            Clear-Sky Solar Radiation (kWh/m²/day)
-            <Tooltip text="Theoretical monthly mean daily GHI under completely cloud-free conditions from NASA POWER / satellite models. Typical values range from 4.0 to 8.5 kWh/m²/day." />
+            Clear-Sky Surface Solar Radiation (CLRSKY_SFC_SW_DWN)
+            <Tooltip text="Theoretical cloud-free GHI (kWh/m²/day) from NASA POWER / CERES SYN1deg. Typical values range from 4.0 to 8.0 kWh/m²/day." />
           </label>
           <div className="relative">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-solar-gold">
@@ -292,8 +356,84 @@ export default function PredictionForm({ onSubmit, isLoading }: PredictionFormPr
             </p>
           )}
           <p className="mt-1.5 text-[11px] text-slate-400">
-            Note: CLEARSKY represents the physical upper ceiling of solar irradiation without cloud attenuation.
+            Represents the physical clear-sky downward shortwave flux ceiling (kWh/m²/day).
           </p>
+        </div>
+
+        {/* Advanced Features Accordion */}
+        <div className="rounded-xl border border-white/10 bg-navy-900/60 p-4 space-y-3">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="w-full flex items-center justify-between text-left text-xs font-semibold text-solar-gold hover:text-amber-300 transition-colors cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              <Sliders size={15} />
+              Advanced Solar & Atmospheric Features (DNI, DIFF, Cloud %)
+            </span>
+            {showAdvanced ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+
+          {showAdvanced && (
+            <div className="space-y-4 pt-3 border-t border-white/5 animate-fade-in-up">
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Provide custom direct beam and diffuse solar irradiance measurements, or leave blank for automatic atmospheric radiative transfer derivation.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* DNI */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Direct Normal (DNI)
+                    <Tooltip text="ALLSKY_SFC_SW_DNI: Direct solar beam irradiance along the normal surface (kWh/m²/day). Essential for concentrating solar power & tracking systems." />
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={values.dni}
+                    onChange={(e) => setValues({ ...values, dni: e.target.value })}
+                    placeholder="Auto-derived"
+                    className="w-full rounded-lg bg-navy-800 border border-white/10 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-solar-gold"
+                  />
+                  {errors.dni && <p className="mt-1 text-[10px] text-red-400">{errors.dni}</p>}
+                </div>
+
+                {/* Diffuse */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Diffuse Radiation (DIFF)
+                    <Tooltip text="ALLSKY_SFC_SW_DIFF: Diffuse sky radiation scattered by air molecules, aerosols, and clouds (kWh/m²/day)." />
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={values.diffuse}
+                    onChange={(e) => setValues({ ...values, diffuse: e.target.value })}
+                    placeholder="Auto-derived"
+                    className="w-full rounded-lg bg-navy-800 border border-white/10 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-solar-gold"
+                  />
+                  {errors.diffuse && <p className="mt-1 text-[10px] text-red-400">{errors.diffuse}</p>}
+                </div>
+
+                {/* Cloud Amount */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Cloud Amount (%)
+                    <Tooltip text="CLOUD_AMT: Monthly mean cloud coverage percentage (0–100%). Modulates diffuse fraction and direct beam attenuation." />
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={values.cloud_amt}
+                    onChange={(e) => setValues({ ...values, cloud_amt: e.target.value })}
+                    placeholder="Auto-derived"
+                    className="w-full rounded-lg bg-navy-800 border border-white/10 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-solar-gold"
+                  />
+                  {errors.cloud_amt && <p className="mt-1 text-[10px] text-red-400">{errors.cloud_amt}</p>}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Submit */}
@@ -306,7 +446,7 @@ export default function PredictionForm({ onSubmit, isLoading }: PredictionFormPr
             {isLoading ? (
               <>
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-navy-900 border-t-transparent" />
-                <span>Running Machine Learning Model...</span>
+                <span>Computing Solar Irradiance...</span>
               </>
             ) : (
               <>
