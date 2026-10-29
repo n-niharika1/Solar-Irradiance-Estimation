@@ -1,0 +1,8 @@
+{
+  "name": "solar-irradiance-estimation-root",
+  "private": true,
+  "scripts": {
+    "install:frontend": "cd frontend && pnpm install",
+    "build": "cd frontend && pnpm install --no-frozen-lockfile && pnpm run build"
+  }
+}
